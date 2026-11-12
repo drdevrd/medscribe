@@ -581,6 +581,7 @@ function renderFixes(){
     r.append(t,x); box.append(r);
   });
 }
+const cleanKey=s=>(s||'').replace(/[^\x21-\x7E]/g,'');
 function openSettings(){
   $('kGroq').value=cfg.kGroq; $('kClaude').value=cfg.kClaude;
   $('mGroq').value=cfg.mGroq; $('mClaude').value=cfg.mClaude;
@@ -589,8 +590,10 @@ function openSettings(){
   renderFixes(); $('drawer').classList.add('open');
 }
 function saveSettings(){
-  cfg.kGroq=$('kGroq').value.trim(); cfg.kClaude=$('kClaude').value.trim();
-  cfg.mGroq=$('mGroq').value; cfg.mClaude=$('mClaude').value.trim()||'claude-sonnet-5-5';
+  const rawG=$('kGroq').value, rawC=$('kClaude').value;
+  if(/[\u2022\u25CF\u2026*]{3,}/.test(rawG+rawC)){ alert('That looks like a hidden/masked key (dots or stars). Copy the full key again from the Groq / Anthropic console.'); return; }
+  cfg.kGroq=cleanKey(rawG); cfg.kClaude=cleanKey(rawC);
+  cfg.mGroq=$('mGroq').value; cfg.mClaude=cleanKey($('mClaude').value)||'claude-sonnet-5-5';
   cfg.wPrompt=$('wPrompt').value.trim(); cfg.drugs=$('drugs').value; cfg.extra=$('extra').value;
   ['kGroq','kClaude','mGroq','mClaude','wPrompt','drugs','extra'].forEach(k=>store.set(k,cfg[k]));
   refreshBadges(); $('drawer').classList.remove('open'); setStatus('Settings saved.','ok');
@@ -844,6 +847,7 @@ $('qAdd').onclick=()=>{
 };
 
 /* init */
+cfg.kGroq=cleanKey(cfg.kGroq); cfg.kClaude=cleanKey(cfg.kClaude); cfg.mClaude=cleanKey(cfg.mClaude)||'claude-sonnet-5-5';
 $('out').value=store.get('draft','');
 refreshBadges();
 if(!cfg.kGroq) setStatus('First time: open Settings and paste your Groq key (and Claude key for medical correction).');
