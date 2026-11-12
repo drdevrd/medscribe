@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MedScribe – Medical Dictation</title>
+<style>
+:root{
+  --bg:#f3f1ec; --card:#fffdf9; --ink:#1c2526; --mute:#667173; --line:#ddd8cd;
+  --teal:#0c6b62; --teal-d:#084d47; --rec:#c8372d; --amber:#b7791f;
+  --add:#d8f1df; --del:#f9dcd8; --flag:#fdebc0;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.5 "Segoe UI",Roboto,"Noto Sans","Noto Sans Tamil","Nirmala UI",system-ui,sans-serif}
+header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--line);background:var(--card);position:sticky;top:0;z-index:5}
+header h1{margin:0;font-size:19px;letter-spacing:.3px}
+header h1 span{color:var(--teal)}
+main{max-width:920px;margin:0 auto;padding:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);padding:8px 13px}
+button:hover{border-color:var(--teal)}
+button.primary{background:var(--teal);color:#fff;border-color:var(--teal)}
+button.primary:hover{background:var(--teal-d)}
+button.small{padding:4px 9px;font-size:13px}
+button:disabled{opacity:.45;cursor:not-allowed}
+select,input[type=text],input[type=password],textarea{font:inherit;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:#fff;color:var(--ink);width:100%}
+textarea{resize:vertical}
+label{font-size:13px;color:var(--mute);display:block;margin:10px 0 4px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.row>*{flex:1 1 150px}
+.row>.fit{flex:0 0 auto}
+
+/* recorder */
+.recwrap{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+#recBtn{width:92px;height:92px;border-radius:50%;border:4px solid #fff;outline:2px solid var(--rec);background:var(--rec);color:#fff;font-weight:700;font-size:14px;flex:0 0 auto;transition:transform .1s}
+#recBtn:active{transform:scale(.96)}
+#recBtn.on{background:#fff;color:var(--rec);animation:pulse 1.2s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(200,55,45,.45)}100%{box-shadow:0 0 0 18px rgba(200,55,45,0)}}
+.recinfo{flex:1 1 220px;min-width:200px}
+#timer{font:600 30px/1 ui-monospace,Consolas,monospace}
+#meter{height:8px;background:#e7e2d6;border-radius:4px;overflow:hidden;margin:10px 0 6px}
+#meter i{display:block;height:100%;width:0;background:var(--teal);transition:width .08s}
+#status{font-size:14px;color:var(--mute);min-height:21px}
+#status.err{color:var(--rec)}
+#status.ok{color:var(--teal)}
+
+#out{min-height:240px;font-size:17px;line-height:1.6}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+
+#diff{font-size:15px;line-height:1.75;white-space:pre-wrap;word-break:break-word}
+#diff ins{background:var(--add);text-decoration:none;border-radius:3px;padding:0 2px}
+#diff del{background:var(--del);border-radius:3px;padding:0 2px;color:#7c2a23}
+#diff mark{background:var(--flag);border-radius:3px;padding:0 2px}
+.legend{font-size:12px;color:var(--mute);margin-top:8px}
+.legend b{font-weight:500;padding:0 5px;border-radius:3px}
+h2{font-size:14px;margin:0 0 10px;text-transform:uppercase;letter-spacing:.8px;color:var(--mute)}
+
+/* settings drawer */
+#drawer{position:fixed;inset:0;background:rgba(20,30,30,.45);display:none;z-index:20}
+#drawer.open{display:block}
+#panel{position:absolute;right:0;top:0;bottom:0;width:min(520px,100%);background:var(--card);overflow:auto;padding:18px}
+#panel h3{margin:18px 0 2px;font-size:15px}
+.hint{font-size:12.5px;color:var(--mute);margin:3px 0 0}
+.fixrow{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:5px 0;border-bottom:1px dashed var(--line);font-size:14px}
+.fixrow code{background:#eee9dd;padding:1px 5px;border-radius:4px}
+.badge{display:inline-block;font-size:12px;padding:2px 8px;border-radius:10px;background:#e7e2d6;color:var(--mute)}
+.badge.on{background:var(--add);color:#1d5c33}
+</style>
+</head>
+<body>
+<header>
+  <h1>Med<span>Scribe</span></h1>
+  <div class="row" style="flex:0 0 auto;gap:8px">
+    <span id="bStt" class="badge fit">Whisper: no key</span>
+    <span id="bFix" class="badge fit">Claude: no key</span>
+    <button id="openSet" class="fit">⚙ Settings</button>
+  </div>
+</header>
+
+<main>
+  <div class="card">
+    <div class="recwrap">
+      <button id="recBtn" aria-label="Start or stop recording">REC</button>
+      <div class="recinfo">
+        <div id="timer">00:00</div>
+        <div id="meter"><i></i></div>
+        <div id="status">Tap REC and dictate. Tap again to stop and transcribe.</div>
+      </div>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <div><label>Spoken language</label>
+        <select id="lang">
+          <option value="">Auto-detect (mixed Tamil/English)</option>
+          <option value="en" selected>English (any accent)</option>
+          <option value="ta">Tamil</option>
+          <option value="hi">Hindi</option>
+          <option value="ml">Malayalam</option>
+        </select></div>
+      <div><label>Output</label>
+        <select id="mode">
+          <option value="exact">Exact dictation (corrected)</option>
+          <option value="note">Tidy clinical note</option>
+          <option value="english">Translate to English</option>
+        </select></div>
+      <div class="fit"><label>&nbsp;</label>
+        <button id="pauseBtn" disabled>Pause</button>
+        <button id="upBtn">Upload audio</button>
+        <input type="file" id="file" accept="audio/*,video/mp4,.m4a,.mp3,.wav,.ogg,.webm,.flac" hidden>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Transcript</h2>
+    <textarea id="out" placeholder="Your dictation appears here. You can edit freely; each new recording is added at the end."></textarea>
+    <div class="toolbar">
+      <button id="copyBtn" class="primary">Copy</button>
+      <button id="docBtn">Download Word (.doc)</button>
+      <button id="txtBtn">Download .txt</button>
+      <button id="undoBtn">Undo last take</button>
+      <button id="clearBtn">Clear</button>
+    </div>
+  </div>
+
+  <div class="card" id="diffCard" style="display:none">
+    <h2>What was corrected in the last take</h2>
+    <div id="diff"></div>
+    <div class="legend"><b style="background:var(--del)">heard</b> → <b style="background:var(--add)">corrected</b> &nbsp; <b style="background:var(--flag)">[?unsure]</b> = check this word/dose yourself</div>
+    <div class="row" style="margin-top:12px">
+      <input type="text" id="qHeard" placeholder="Still wrong? What it wrote (e.g. maha sef)">
+      <input type="text" id="qRight" placeholder="What it should be (e.g. Mahacef)">
+      <button id="qAdd" class="fit primary">Teach</button>
+    </div>
+    <p class="hint">Taught corrections are applied automatically to every future recording on this device.</p>
+  </div>
+</main>
+
+<div id="drawer">
+  <div id="panel">
+    <div class="row"><h2 style="margin:0;flex:1">Settings</h2><button id="closeSet" class="fit">Close</button></div>
+
+    <h3>1. Speech recognition (Groq Whisper)</h3>
+    <label>Groq API key</label>
+    <input type="password" id="kGroq" placeholder="gsk_...">
+    <label>Model</label>
+    <select id="mGroq">
+      <option value="whisper-large-v3">whisper-large-v3 (most accurate)</option>
+      <option value="whisper-large-v3-turbo">whisper-large-v3-turbo (faster)</option>
+    </select>
+    <label>Context hint given to Whisper (short – about 150 words max)</label>
+    <textarea id="wPrompt" rows="4"></textarea>
+
+    <h3>2. Medical correction (Claude)</h3>
+    <label>Claude API key (SK)</label>
+    <input type="password" id="kClaude" placeholder="sk-ant-...">
+    <label>Model</label>
+    <input type="text" id="mClaude">
+    <p class="hint">Without this key the app still transcribes, with only basic spelling-match correction of drug names.</p>
+
+    <h3>3. Hospital drug list <span id="drugCount" class="badge"></span></h3>
+    <textarea id="drugs" rows="9"></textarea>
+    <p class="hint">One name per line. Add new stock any time. <a href="#" id="resetDrugs">Reset to built-in list</a></p>
+
+    <h3>4. Extra words (doctor names, wards, your own terms)</h3>
+    <textarea id="extra" rows="3" placeholder="One per line"></textarea>
+
+    <h3>5. Taught corrections</h3>
+    <div id="fixList"></div>
+
+    <div class="toolbar" style="margin-top:18px"><button id="saveSet" class="primary">Save</button></div>
+    <p class="hint">Keys and lists are stored only in this browser. Audio goes to Groq and text to Anthropic for processing – avoid dictating patient names/IDs if that matters for your policy.</p>
+  </div>
+</div>
+
+<script>
+/* ============ Built-in vocabulary ============ */
+// From H.S. Hospital pharmacy stock list (names restored from the truncated printout)
+const DEFAULT_DRUGS = `A to Z NS Drops
+Aciloc
+Acitrom
+Acogut
+Alaspan
+Alcoliv
+Alerid
+Alex Cough
+Alex Plus
+Allegra
+Allercet DC
+Ambistryn-S
+Amlodac
+Amlodac AT
+Anawin
+Anofer S
+Aqsusten
+Aristozyme
+Artacil
+Ascoril SF Expectorant
+Ascoril D Junior
+Ascoril D Plus
+Ascoril Flu
+Ascoril LS
+Ascoril Plus
+Asomex
+Asomex AT
+Asthalin
+Asthalin Inhaler
+Asthalin Respules
+Astymin SN
+Atarax
+Aten
+Atorva
+Augmentin
+Augmentin Duo
+Avil
+Azee
+Bandy
+Becosules
+Benadryl
+Betadine
+Betnesol
+Betnovate
+Brufen
+Budecort Respules
+Buscogast
+Cabgolin
+Caladryl Lotion
+Calapure A Lotion
+Calcium Sandoz
+Calmpose
+Calpol
+Cameron
+Candid
+Candid B
+Candid V3
+Candiforce
+Cataspa
+CCM
+Cefolac
+Cefolac DT
+Cefolac O
+Cepodem
+Cetaphil
+Cetzine
+Chericof
+Chericof LS
+Chymoral
+Chymoral Forte
+Chymoral Plus
+Cifran CT
+Ciplox
+Ciplox Eye Drops
+Ciprobid
+Citralka
+Clopitab
+Clopitab A
+Consevel
+Cremaffin Plus
+Crocin
+Cyclopam
+D3 Must Drops
+D-Rise Sachet
+Daonil
+Derek
+Derek-D
+Deriphyllin
+Desowen Lotion
+Dexona
+Diabend M
+Diafoot SB
+Diapride
+Diapride M2
+Digene
+DNS
+Dolo
+Dolo Drops
+Dologel CT
+Dolopar
+Domstal
+Doxy
+Drez S
+Dulcoflex
+Duphalac
+Duphaston
+Duvadilan
+Econorm
+Ecosprin
+Electral
+Eltroxin
+Emanzen D
+Emeset
+Encorate Chrono
+Enoxion
+Enterogermina
+Envas
+Epidosin
+Eptoin
+Essentiale L
+Etorica-MR
+Evalon Cream
+Evion
+Fenza
+Feritisure
+Flagyl
+Folvite
+Forxiga
+Fourts-B
+Frisium
+Gabamax
+Gabantin
+Gaviscon
+Gelusil MPS
+Genticyn
+Gerbisa
+Glador
+Glizid
+Glizid M
+Globac XT
+Globac Z
+Glucobay
+Glycomet
+Glynase MF
+Gudcef
+Gudcef Plus
+Happi
+Happi-D
+Happi L
+Human Actrapid
+Human Mixtard
+Huminsulin
+Hydroheal
+Hyocimax MF
+Hyocimax-S
+Ibugesic Plus
+Imol Plus
+Insugen
+Ipravent Respules
+Isoflav-CR
+Jonac
+Jonac AQ
+Junior Lanzol
+Karvol Plus
+Kenacort
+Kenadion
+Ketorol
+KZ Lotion
+Lactare
+Lanzol
+Lariago DS
+Lasilactone
+Lasix
+Letoval
+Letroz
+Levipil
+Levolin
+Levosiz
+Liv 52
+Livogen
+Livogen-XT
+Lizoforce
+Lopamide
+Loxof
+Loxof OZ
+Mahacef
+Mahacef CV
+Marifur
+Maxoza L
+Meftal Spas
+Megaheal
+Megazolid
+Metrogyl
+Mezolam
+Mikacin
+Misoprost
+Monocef
+Montek LC
+Montek LC Kid
+Moov
+Mox
+Mox Clav
+Moxclav BD
+Moxclav DS
+Moxicip
+Mucaine Gel
+Mumfer Max
+Mupimet
+MVI
+Mycrozine
+Nasivion
+Nasoclear
+Neomol
+Neorof
+Neotomic
+Neurobion Forte
+Nexito Plus
+Nitravet
+Nitrobact
+Nor Metrogyl
+Norflox
+Novelon
+NS
+Numol SP
+Numol MR
+Nurokind LC
+Nutrolin B
+Odoxil
+Oflomac
+Oframax Forte
+Omez
+Omez DSR
+Ondem
+Oraways
+Orni O
+Ornida
+Orofer S
+Orofer XT
+Osil
+Overzyme
+Oxerute Cream
+Ozomet G1
+Ozomet G2
+P 120
+P 125
+P 250
+P 500
+Pan
+Pan D
+Pantop
+Pantop D
+Pedicloryl
+Perinorm
+Phenergan
+Pioglit
+Piriton CS
+Polybion
+Potcl
+Predmet
+Prepro
+Primolut N
+Proluton Depot
+Protinex
+Pulmoclear
+Pyrolate
+Quadriderm
+Racigyl
+Raciper D
+Ranitin
+Rcifax
+Recofast Plus
+Renerve Plus
+Restyl
+Riconia
+Riconia LP
+RL
+Rosuvas
+Rutoheal
+Rutoheal-D
+Shelcal
+Siloderm
+Silverex Ionic
+Silybon
+Smuth Ointment
+Sodac
+Softovac
+Sorbiline
+Sporidex
+Stugeron
+Styptochrome
+Styptovit E
+Sucol
+Sucrafil O
+Supradyn
+Sysron NCR
+T-Bact
+T-Minic
+Taxim
+Taxim O
+Tazar
+Telma
+Telma H
+Thiosol
+Thrombophob
+Thyronorm
+Tonoferon
+Tramasure P
+Tramazac
+Trenaxa
+Tropine
+TT
+Udiliv
+Ultracet
+Unienzyme
+Unwanted Kit
+Urikind
+Urimax
+V Wash
+Valium
+Vasocon
+Veltam
+Vertin
+Volini
+Volix
+Voveran Emulgel
+Voveran SR
+Waxonil
+Xylocaine
+Xyzal
+Z&D Syrup
+Zanocin
+Zanocin OZ
+Zedott
+Zentel
+Zerodol MR
+Zerodol P
+Zerodol SP
+Zifi
+Zifi DT
+Zifi O
+Zifi OZ
+Zifi Turbo
+Zincofer
+Zinconia
+Zincovit
+Zovirax
+Zyrcold
+Zyrtec
+Zytee RB`;
+
+// Generic and specialty terms most often mangled by speech recognition
+const MED_TERMS = `amoxicillin, amoxicillin-clavulanate, ampicillin, cloxacillin, cefixime, cefpodoxime, cefotaxime, ceftriaxone, ceftazidime, cefepime, cefoperazone-sulbactam, piperacillin-tazobactam, meropenem, imipenem, vancomycin, linezolid, teicoplanin, colistin, amikacin, gentamicin, azithromycin, clarithromycin, doxycycline, ofloxacin, ciprofloxacin, levofloxacin, metronidazole, ornidazole, cotrimoxazole, nitrofurantoin, acyclovir, oseltamivir, fluconazole, amphotericin B, albendazole, ivermectin, artesunate, chloroquine,
+paracetamol, ibuprofen, mefenamic acid, diclofenac, aceclofenac, ketorolac, tramadol, fentanyl, morphine, midazolam, lorazepam, diazepam, clobazam, phenobarbitone, phenytoin, fosphenytoin, levetiracetam, sodium valproate, carbamazepine, ketamine, propofol, dexmedetomidine, vecuronium, atracurium, succinylcholine, atropine, glycopyrrolate, neostigmine,
+adrenaline, noradrenaline, dopamine, dobutamine, milrinone, vasopressin, furosemide, spironolactone, mannitol, 3% saline, enalapril, amlodipine, digoxin, adenosine, amiodarone, heparin, enoxaparin, tranexamic acid, vitamin K,
+salbutamol, levosalbutamol, ipratropium, budesonide, montelukast, levocetirizine, cetirizine, hydroxyzine, chlorpheniramine, pheniramine, aminophylline, magnesium sulphate, hydrocortisone, dexamethasone, methylprednisolone, prednisolone,
+ondansetron, domperidone, metoclopramide, ranitidine, pantoprazole, omeprazole, lansoprazole, rabeprazole, sucralfate, lactulose, bisacodyl, zinc, ORS, racecadotril, Saccharomyces boulardii, dicyclomine, hyoscine, simethicone,
+insulin, regular insulin, glargine, metformin, levothyroxine, calcium gluconate, potassium chloride, sodium bicarbonate, dextrose, 10% dextrose, 25% dextrose, DNS, Ringer lactate, normal saline, Isolyte P, N/2 saline, N/5 saline, iron sucrose, ferrous ascorbate, folic acid, cholecalciferol, multivitamin,
+immunoglobulin, IVIG, surfactant, caffeine citrate, packed red cells, FFP, platelets, cryoprecipitate,
+pyrexia, febrile seizure, status epilepticus, bronchiolitis, bronchopneumonia, lobar pneumonia, croup, epiglottitis, wheeze-associated LRTI, acute severe asthma, empyema, pleural effusion, pneumothorax, ARDS, acute gastroenteritis, some dehydration, severe dehydration, hypernatremia, hyponatremia, hypokalemia, hyperkalemia, hypocalcemia, hypoglycemia, metabolic acidosis, DKA, diabetic ketoacidosis, sepsis, septic shock, MODS, DIC, dengue, dengue shock syndrome, dengue with warning signs, scrub typhus, enteric fever, leptospirosis, malaria, UTI, pyelonephritis, nephrotic syndrome, acute glomerulonephritis, AKI, HUS, meningitis, encephalitis, acute encephalitis syndrome, Guillain-Barré syndrome, raised intracranial pressure, Kawasaki disease, MIS-C, myocarditis, congestive cardiac failure, SVT, tetralogy of Fallot, VSD, ASD, PDA, ITP, thalassemia, sickle cell, iron deficiency anaemia, neonatal jaundice, hyperbilirubinemia, phototherapy, exchange transfusion, prematurity, RDS, TTN, meconium aspiration, HIE, NEC, neonatal sepsis, intussusception, appendicitis, pyloric stenosis, snake bite, scorpion sting, organophosphate poisoning, kerosene ingestion, foreign body aspiration, anaphylaxis, urticaria, impetigo, cellulitis, hand foot and mouth disease, varicella, measles, mumps, pertussis,
+GCS, AVPU, CRT, SpO2, FiO2, PEEP, PIP, MAP, CVP, tidal volume, SIMV, pressure support, CPAP, HFNC, BiPAP, NIV, intubation, extubation, ET tube, ICD, central line, arterial line, PICC, UVC, intraosseous, lumbar puncture, CSF, ABG, VBG, lactate, CBC, CRP, procalcitonin, ESR, LFT, RFT, SGOT, SGPT, PT INR, aPTT, serum electrolytes, urine routine, blood culture, urine culture, Widal, NS1, dengue IgM, peripheral smear, chest X-ray, USG abdomen, ECHO, EEG, CT brain, MRI brain,
+mg/kg/dose, mg/kg/day, mcg/kg/min, ml/kg/hr, mEq, IU, OD, BD, TDS, QID, Q6H, Q8H, Q12H, SOS, stat, PRN, HS, IV, IM, SC, PO, PR, nebulisation, bolus, infusion, maintenance fluids, NPO, afebrile, hemodynamically stable, tachypnea, tachycardia, bradycardia, hypotension, retractions, crepitations, rhonchi, air entry, hepatosplenomegaly, bulging fontanelle, neck stiffness, capillary refill, urine output`;
+
+const DEFAULT_WPROMPT = "Dictation by a paediatrician and paediatric intensivist in India. Medical terms, drug brand names and doses: Inj. Monocef 500 mg IV BD, Syr. Calpol, Syr. Ascoril LS, Zifi 200, Mahacef, Taxim O, Augmentin Duo, Azee, Asthalin and Budecort nebulisation, Levolin, Montek LC, Emeset, Ondem, Rantac, Pan D, Zincovit, Zinconia, Econorm, Enterogermina, Levipil, Eptoin, Dexona, Lasix, mg/kg/dose, SpO2, CRP, bronchiolitis, febrile seizure, dengue.";
+
+const DEFAULT_FIXES = [["maha sef","Mahacef"],["xifi","Zifi"],["jiran","Stugeron"]];
+
+/* ============ State / storage ============ */
+const $ = id => document.getElementById(id);
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem('ms_'+k); return v===null ? d : JSON.parse(v); }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem('ms_'+k, JSON.stringify(v)); }catch(e){} }
+};
+let cfg = {
+  kGroq: store.get('kGroq',''), kClaude: store.get('kClaude',''),
+  mGroq: store.get('mGroq','whisper-large-v3'), mClaude: store.get('mClaude','claude-sonnet-5-5'),
+  wPrompt: store.get('wPrompt', DEFAULT_WPROMPT),
+  drugs: store.get('drugs', DEFAULT_DRUGS), extra: store.get('extra',''),
+  fixes: store.get('fixes', DEFAULT_FIXES)
+};
+let takes = [];           // text lengths for undo
+const drugList = () => cfg.drugs.split('\n').map(s=>s.trim()).filter(Boolean);
+
+function setStatus(msg, cls){ const s=$('status'); s.textContent=msg; s.className=cls||''; }
+function refreshBadges(){
+  $('bStt').textContent = cfg.kGroq ? 'Whisper: ready' : 'Whisper: no key';
+  $('bStt').className = 'badge fit' + (cfg.kGroq?' on':'');
+  $('bFix').textContent = cfg.kClaude ? 'Claude: ready' : 'Claude: no key';
+  $('bFix').className = 'badge fit' + (cfg.kClaude?' on':'');
+}
+
+/* ============ Settings ============ */
+function renderFixes(){
+  const box=$('fixList'); box.innerHTML='';
+  if(!cfg.fixes.length){ box.innerHTML='<p class="hint">None yet. Use "Teach" under a transcript.</p>'; return; }
+  cfg.fixes.forEach((f,i)=>{
+    const r=document.createElement('div'); r.className='fixrow';
+    const t=document.createElement('span');
+    const a=document.createElement('code'); a.textContent=f[0];
+    const b=document.createElement('code'); b.textContent=f[1];
+    t.append(a,' → ',b);
+    const x=document.createElement('button'); x.className='small'; x.textContent='Remove';
+    x.onclick=()=>{ cfg.fixes.splice(i,1); store.set('fixes',cfg.fixes); renderFixes(); };
+    r.append(t,x); box.append(r);
+  });
+}
+function openSettings(){
+  $('kGroq').value=cfg.kGroq; $('kClaude').value=cfg.kClaude;
+  $('mGroq').value=cfg.mGroq; $('mClaude').value=cfg.mClaude;
+  $('wPrompt').value=cfg.wPrompt; $('drugs').value=cfg.drugs; $('extra').value=cfg.extra;
+  $('drugCount').textContent=drugList().length+' items';
+  renderFixes(); $('drawer').classList.add('open');
+}
+function saveSettings(){
+  cfg.kGroq=$('kGroq').value.trim(); cfg.kClaude=$('kClaude').value.trim();
+  cfg.mGroq=$('mGroq').value; cfg.mClaude=$('mClaude').value.trim()||'claude-sonnet-5-5';
+  cfg.wPrompt=$('wPrompt').value.trim(); cfg.drugs=$('drugs').value; cfg.extra=$('extra').value;
+  ['kGroq','kClaude','mGroq','mClaude','wPrompt','drugs','extra'].forEach(k=>store.set(k,cfg[k]));
+  refreshBadges(); $('drawer').classList.remove('open'); setStatus('Settings saved.','ok');
+}
+$('openSet').onclick=openSettings;
+$('closeSet').onclick=()=>$('drawer').classList.remove('open');
+$('drawer').onclick=e=>{ if(e.target.id==='drawer') $('drawer').classList.remove('open'); };
+$('saveSet').onclick=saveSettings;
+$('resetDrugs').onclick=e=>{ e.preventDefault(); $('drugs').value=DEFAULT_DRUGS; };
+
+/* ============ Recording ============ */
+let rec=null, chunks=[], stream=null, t0=0, elapsed=0, tick=null, actx=null, raf=null, wake=null, mime='';
+function pickMime(){
+  const c=['audio/webm;codecs=opus','audio/webm','audio/mp4','audio/ogg;codecs=opus'];
+  return c.find(m=>window.MediaRecorder && MediaRecorder.isTypeSupported(m)) || '';
+}
+function fmt(ms){ const s=Math.floor(ms/1000); return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); }
+function startTick(){ t0=Date.now(); tick=setInterval(()=>{ $('timer').textContent=fmt(elapsed+Date.now()-t0); },250); }
+function stopTick(){ if(tick){ clearInterval(tick); tick=null; elapsed+=Date.now()-t0; } }
+
+async function startRec(){
+  if(!cfg.kGroq){ setStatus('Add your Groq API key in Settings first.','err'); openSettings(); return; }
+  if(!navigator.mediaDevices || !window.MediaRecorder){ setStatus('This browser cannot record. Open the page over https in Chrome.','err'); return; }
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true,channelCount:1}});
+  }catch(e){ setStatus('Microphone blocked: '+e.message,'err'); return; }
+  mime=pickMime(); chunks=[];
+  rec = new MediaRecorder(stream, mime ? {mimeType:mime, audioBitsPerSecond:48000} : undefined);
+  rec.ondataavailable = e => { if(e.data && e.data.size) chunks.push(e.data); };
+  rec.onstop = onRecStop;
+  rec.start(1000);
+  elapsed=0; startTick();
+  // level meter
+  try{
+    actx = new (window.AudioContext||window.webkitAudioContext)();
+    const an = actx.createAnalyser(); an.fftSize=512;
+    actx.createMediaStreamSource(stream).connect(an);
+    const buf = new Uint8Array(an.fftSize);
+    const loop = () => {
+      an.getByteTimeDomainData(buf);
+      let peak=0; for(let i=0;i<buf.length;i++){ const v=Math.abs(buf[i]-128); if(v>peak) peak=v; }
+      $('meter').firstElementChild.style.width = Math.min(100, peak/128*220)+'%';
+      raf=requestAnimationFrame(loop);
+    }; loop();
+  }catch(e){}
+  try{ wake = await navigator.wakeLock.request('screen'); }catch(e){}
+  $('recBtn').classList.add('on'); $('recBtn').textContent='STOP';
+  $('pauseBtn').disabled=false; $('pauseBtn').textContent='Pause';
+  setStatus('Recording… speak naturally. Say drug, dose, route, frequency.');
+}
+function stopRec(){ if(rec && rec.state!=='inactive'){ rec.stop(); } }
+function cleanupRec(){
+  stopTick(); if(raf) cancelAnimationFrame(raf);
+  if(actx){ actx.close().catch(()=>{}); actx=null; }
+  if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+  if(wake){ wake.release().catch(()=>{}); wake=null; }
+  $('meter').firstElementChild.style.width='0';
+  $('recBtn').classList.remove('on'); $('recBtn').textContent='REC'; $('pauseBtn').disabled=true;
+}
+function onRecStop(){
+  const type=(mime||'audio/webm').split(';')[0];
+  const blob=new Blob(chunks,{type});
+  cleanupRec();
+  const ext = type.includes('mp4') ? 'm4a' : type.includes('ogg') ? 'ogg' : 'webm';
+  processAudio(blob,'dictation.'+ext);
+}
+$('recBtn').onclick=()=>{ (rec && rec.state!=='inactive') ? stopRec() : startRec(); };
+$('pauseBtn').onclick=()=>{
+  if(!rec) return;
+  if(rec.state==='recording'){ rec.pause(); stopTick(); $('pauseBtn').textContent='Resume'; setStatus('Paused.'); }
+  else if(rec.state==='paused'){ rec.resume(); startTick(); $('pauseBtn').textContent='Pause'; setStatus('Recording…'); }
+};
+$('upBtn').onclick=()=>$('file').click();
+$('file').onchange=e=>{ const f=e.target.files[0]; if(f){ if(!cfg.kGroq){ setStatus('Add your Groq API key in Settings first.','err'); openSettings(); } else processAudio(f,f.name); } e.target.value=''; };
+
+/* ============ Pipeline ============ */
+let busy=false;
+async function processAudio(blob,name){
+  if(busy) return;
+  if(blob.size < 1500){ setStatus('Recording too short.','err'); return; }
+  if(blob.size > 24*1024*1024){ setStatus('Audio is over 24 MB – record in shorter takes.','err'); return; }
+  busy=true; $('recBtn').disabled=true;
+  try{
+    setStatus('Transcribing with Whisper…');
+    const raw = await whisper(blob,name);
+    if(!raw.trim()){ setStatus('No speech detected.','err'); return; }
+    let fixed = applyFixes(raw), usedClaude=false;
+    if(cfg.kClaude){
+      setStatus('Checking drug names and medical terms…');
+      try{ fixed = await claudeFix(fixed); usedClaude=true; }
+      catch(e){ fixed = localFuzzy(fixed); setStatus('Claude step failed ('+e.message+'). Basic correction used.','err'); }
+    } else { fixed = localFuzzy(fixed); }
+    appendTake(fixed);
+    showDiff(raw,fixed);
+    if(usedClaude || !cfg.kClaude) setStatus(usedClaude ? 'Done. Review highlighted corrections below.' : 'Done (basic correction – add Claude key for full medical correction).','ok');
+  }catch(e){
+    setStatus('Failed: '+e.message,'err');
+  }finally{ busy=false; $('recBtn').disabled=false; }
+}
+
+function whisperPrompt(){
+  // Whisper only reads ~224 tokens of prompt, so keep it short: user hint + taught targets
+  const taught=[...new Set(cfg.fixes.map(f=>f[1]))].slice(0,25).join(', ');
+  let p=cfg.wPrompt||''; if(taught) p+=' '+taught+'.';
+  return p.slice(0,850);
+}
+async function whisper(blob,name){
+  const fd=new FormData();
+  fd.append('file',blob,name);
+  fd.append('model',cfg.mGroq);
+  fd.append('temperature','0');
+  fd.append('response_format','json');
+  const lang=$('lang').value; if(lang) fd.append('language',lang);
+  const p=whisperPrompt(); if(p) fd.append('prompt',p);
+  const r=await fetch('https://api.groq.com/openai/v1/audio/transcriptions',{method:'POST',headers:{Authorization:'Bearer '+cfg.kGroq},body:fd});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error((j.error&&j.error.message)||('Groq error '+r.status));
+  return j.text||'';
+}
+
+const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+function applyFixes(t){
+  cfg.fixes.forEach(([a,b])=>{
+    if(!a) return;
+    const re=new RegExp('(^|[^\\p{L}\\p{N}])'+escRe(a).replace(/\s+/g,'\\s+')+'(?![\\p{L}\\p{N}])','giu');
+    t=t.replace(re,(m,pre)=>pre+b);
+  });
+  return t;
+}
+
+async function claudeFix(text){
+  const mode=$('mode').value;
+  const modeRule = {
+    exact: 'OUTPUT MODE: Exact dictation. Keep the speaker\'s wording and order. Only fix recognition errors, punctuation, capitalisation and spoken formatting commands. If Tamil or another language was spoken, keep it in its own script.',
+    note: 'OUTPUT MODE: Tidy clinical note. Keep every clinical fact exactly as dictated, but remove fillers and false starts, and lay it out cleanly (short paragraphs; medications as a numbered list in the form "Inj./Syr./Tab. Name dose route frequency × duration" when the speaker dictated them). Do not add headings or content the speaker did not say.',
+    english: 'OUTPUT MODE: Translate to English. Render everything in clear medical English, translating any Tamil/Hindi/Malayalam speech faithfully. Drug names, doses and numbers must be carried over unchanged.'
+  }[mode];
+  const sysRules = `You correct raw speech-to-text output of medical dictation by doctors in a paediatric and multi-specialty hospital in Tamil Nadu, India. Speakers have varied Indian accents (Tamil, Malayalam, Hindi, others) and may mix languages. The recogniser often mangles drug brand names, generics, abbreviations and units.
+
+RULES
+1. Fix misrecognised drug names, medical terms, abbreviations, doses and units. When a garbled word sounds like an item in the HOSPITAL DRUG LIST, use that exact spelling. Otherwise use your own medical knowledge of Indian brand names and generics.
+2. Use context (form, dose, route, indication, patient age) to choose between similar-sounding drugs.
+3. NEVER add, remove or alter clinical content. Never change a number, dose, frequency or duration to something that was not said. Do not complete or "improve" a prescription.
+4. If you cannot confidently resolve a word, or a dose/unit sounds clinically implausible as heard, keep it and wrap it as [?word] so the doctor checks it. Use this sparingly but always for genuinely doubtful drug names and doses.
+5. Convert spoken commands: "full stop/period", "comma", "new line", "next line", "new paragraph", "colon", "open/close bracket", "number one/point one" for lists.
+6. Standard formatting: mg, mcg, ml, kg, mg/kg/dose, IV, IM, BD, TDS, QID, SOS, SpO2, °F/°C; numerals for doses.
+7. Output ONLY the corrected text. No preamble, no explanations, no quotes.`;
+  const vocab = 'HOSPITAL DRUG LIST (preferred spellings):\n'+drugList().join(', ')
+    + (cfg.extra.trim() ? '\n\nEXTRA LOCAL WORDS (names, wards, terms):\n'+cfg.extra.trim().split('\n').join(', ') : '')
+    + '\n\nCOMMON MEDICAL VOCABULARY:\n'+MED_TERMS
+    + (cfg.fixes.length ? '\n\nKNOWN MISHEARINGS (heard -> correct):\n'+cfg.fixes.map(f=>f[0]+' -> '+f[1]).join('\n') : '');
+  const body={
+    model:cfg.mClaude, max_tokens:8000,
+    system:[{type:'text',text:sysRules+'\n\n'+vocab,cache_control:{type:'ephemeral'}}],
+    messages:[{role:'user',content:modeRule+'\n\nRAW TRANSCRIPT:\n<transcript>\n'+text+'\n</transcript>'}]
+  };
+  const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{
+    'content-type':'application/json','x-api-key':cfg.kClaude,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+    body:JSON.stringify(body)});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error((j.error&&j.error.message)||('Claude error '+r.status));
+  const out=(j.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').trim();
+  if(!out) throw new Error('empty reply');
+  return out.replace(/^<transcript>\s*|\s*<\/transcript>$/g,'');
+}
+
+/* Basic offline-style correction when Claude is not configured */
+function lev(a,b){
+  const m=a.length,n=b.length; if(!m) return n; if(!n) return m;
+  let prev=Array.from({length:n+1},(_,i)=>i), cur=new Array(n+1);
+  for(let i=1;i<=m;i++){ cur[0]=i;
+    for(let j=1;j<=n;j++) cur[j]=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1));
+    [prev,cur]=[cur,prev]; }
+  return prev[n];
+}
+function localFuzzy(text){
+  const norm=s=>s.toLowerCase().replace(/[^a-z0-9]/g,'');
+  const names=drugList().map(d=>({d,n:norm(d)})).filter(x=>x.n.length>=6);
+  const exact=new Set(drugList().map(norm));
+  return text.replace(/[A-Za-z][A-Za-z-]{4,}(?: [A-Za-z]{2,})?/g, w=>{
+    const first=w.split(' ')[0];
+    for(const cand of (w.includes(' ')?[w,first]:[w])){
+      const n=norm(cand); if(n.length<6 || exact.has(n)) continue;
+      let best=null,bs=0;
+      for(const x of names){ if(Math.abs(x.n.length-n.length)>2) continue;
+        const s=1-lev(n,x.n)/Math.max(n.length,x.n.length); if(s>bs){bs=s;best=x;} }
+      if(best && bs>=0.8) return '[?'+best.d+']'+(cand===first && w.includes(' ') ? w.slice(first.length) : '');
+    }
+    return w;
+  });
+}
+
+/* ============ Output ============ */
+function appendTake(t){
+  const o=$('out'); const before=o.value;
+  o.value = before + (before && !/\n$/.test(before) ? '\n' : '') + t;
+  takes.push(before.length); store.set('draft',o.value);
+  o.scrollTop=o.scrollHeight;
+}
+$('out').oninput=()=>store.set('draft',$('out').value);
+$('undoBtn').onclick=()=>{ if(!takes.length) return; const n=takes.pop(); $('out').value=$('out').value.slice(0,n); store.set('draft',$('out').value); $('diffCard').style.display='none'; };
+$('clearBtn').onclick=()=>{ if($('out').value && !confirm('Clear the transcript?')) return; $('out').value=''; takes=[]; store.set('draft',''); $('diffCard').style.display='none'; };
+$('copyBtn').onclick=async()=>{
+  const o=$('out'); try{ await navigator.clipboard.writeText(o.value); }catch(e){ o.select(); document.execCommand('copy'); }
+  setStatus('Copied.','ok');
+};
+function download(name,type,data){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([data],{type})); a.download=name; document.body.append(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),4000); }
+const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const stamp=()=>{ const d=new Date(), p=n=>String(n).padStart(2,'0'); return d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+'-'+p(d.getHours())+p(d.getMinutes()); };
+$('txtBtn').onclick=()=>download('dictation-'+stamp()+'.txt','text/plain;charset=utf-8','﻿'+$('out').value);
+$('docBtn').onclick=()=>{
+  const html='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><style>body{font-family:"Nirmala UI",Calibri,sans-serif;font-size:12pt;line-height:1.4}</style></head><body>'
+    + $('out').value.split('\n').map(l=>'<p>'+(esc(l)||'&nbsp;')+'</p>').join('') + '</body></html>';
+  download('dictation-'+stamp()+'.doc','application/msword','﻿'+html);
+};
+
+/* word-level diff raw -> corrected */
+function showDiff(a,b){
+  const A=a.trim().split(/\s+/), B=b.trim().split(/(\s+)/).filter(x=>x!=='');
+  const Bw=B.filter(x=>!/^\s+$/.test(x));
+  const key=s=>s.toLowerCase().replace(/[.,;:!?()]+$/,'');
+  const m=A.length,n=Bw.length; let html='';
+  if(m*n>4e6){ html=esc(b); }
+  else{
+    const L=Array.from({length:m+1},()=>new Uint16Array(n+1));
+    for(let i=m-1;i>=0;i--) for(let j=n-1;j>=0;j--) L[i][j]= key(A[i])===key(Bw[j]) ? L[i+1][j+1]+1 : Math.max(L[i+1][j],L[i][j+1]);
+    const ops=[]; let i=0,j=0;
+    while(i<m&&j<n){ if(key(A[i])===key(Bw[j])){ ops.push(['=',Bw[j]]); i++; j++; }
+      else if(L[i+1][j]>=L[i][j+1]){ ops.push(['-',A[i]]); i++; } else { ops.push(['+',Bw[j]]); j++; } }
+    while(i<m) ops.push(['-',A[i++]]); while(j<n) ops.push(['+',Bw[j++]]);
+    // re-insert original whitespace (incl. newlines) of corrected text
+    let bi=0, flag=false; const ws=()=>{ let s=''; while(bi<B.length && /^\s+$/.test(B[bi])) s+=B[bi++]; return s; };
+    for(const [op,w] of ops){
+      if(op==='-'){ html+='<del>'+esc(w)+'</del> '; continue; }
+      html+=ws(); bi++;
+      if(w.includes('[?')) flag=true;
+      const e = flag ? '<mark>'+esc(w)+'</mark>' : esc(w);
+      if(w.includes(']')) flag=false;
+      html+= (op==='+' && !e.startsWith('<mark>')) ? '<ins>'+e+'</ins>' : e;
+    }
+  }
+  $('diff').innerHTML=html; $('diffCard').style.display='';
+}
+
+$('qAdd').onclick=()=>{
+  const a=$('qHeard').value.trim(), b=$('qRight').value.trim();
+  if(!a||!b){ setStatus('Fill both boxes to teach a correction.','err'); return; }
+  cfg.fixes=cfg.fixes.filter(f=>f[0].toLowerCase()!==a.toLowerCase()); cfg.fixes.push([a,b]); store.set('fixes',cfg.fixes);
+  const o=$('out'); o.value=applyFixes(o.value); store.set('draft',o.value);
+  $('qHeard').value=''; $('qRight').value=''; setStatus('Learned: "'+a+'" → "'+b+'". Applied to the transcript.','ok');
+};
+
+/* init */
+$('out').value=store.get('draft','');
+refreshBadges();
+if(!cfg.kGroq) setStatus('First time: open Settings and paste your Groq key (and Claude key for medical correction).');
+</script>
+</body>
+</html>
