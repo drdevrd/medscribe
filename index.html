@@ -70,7 +70,7 @@ h2{font-size:14px;margin:0 0 10px;text-transform:uppercase;letter-spacing:.8px;c
 </head>
 <body>
 <header>
-  <h1>Med<span>Scribe</span> <small style="font-size:11px;color:#667173;font-weight:400">v1.1</small></h1>
+  <h1>Med<span>Scribe</span> <small style="font-size:11px;color:#667173;font-weight:400">v1.2</small></h1>
   <div class="row" style="flex:0 0 auto;gap:8px">
     <span id="bStt" class="badge fit">Whisper: no key</span>
     <span id="bFix" class="badge fit">Claude: no key</span>
@@ -150,6 +150,8 @@ h2{font-size:14px;margin:0 0 10px;text-transform:uppercase;letter-spacing:.8px;c
     </select>
     <label>Context hint given to Whisper (short – about 150 words max)</label>
     <textarea id="wPrompt" rows="4"></textarea>
+
+    <label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-size:14px"><input type="checkbox" id="twoPass" style="width:auto"> Double-listen for drug names (more accurate, a few seconds slower)</label>
 
     <h3>2. Medical correction (Claude)</h3>
     <label>Claude API key (SK)</label>
@@ -538,7 +540,18 @@ pyrexia, febrile seizure, status epilepticus, bronchiolitis, bronchopneumonia, l
 GCS, AVPU, CRT, SpO2, FiO2, PEEP, PIP, MAP, CVP, tidal volume, SIMV, pressure support, CPAP, HFNC, BiPAP, NIV, intubation, extubation, ET tube, ICD, central line, arterial line, PICC, UVC, intraosseous, lumbar puncture, CSF, ABG, VBG, lactate, CBC, CRP, procalcitonin, ESR, LFT, RFT, SGOT, SGPT, PT INR, aPTT, serum electrolytes, urine routine, blood culture, urine culture, Widal, NS1, dengue IgM, peripheral smear, chest X-ray, USG abdomen, ECHO, EEG, CT brain, MRI brain,
 mg/kg/dose, mg/kg/day, mcg/kg/min, ml/kg/hr, mEq, IU, OD, BD, TDS, QID, Q6H, Q8H, Q12H, SOS, stat, PRN, HS, IV, IM, SC, PO, PR, nebulisation, bolus, infusion, maintenance fluids, NPO, afebrile, hemodynamically stable, tachypnea, tachycardia, bradycardia, hypotension, retractions, crepitations, rhonchi, air entry, hepatosplenomegaly, bulging fontanelle, neck stiffness, capillary refill, urine output`;
 
-const DEFAULT_WPROMPT = "Dictation by a paediatrician and paediatric intensivist in India. Medical terms, drug brand names and doses: Inj. Monocef 500 mg IV BD, Syr. Calpol, Syr. Ascoril LS, Zifi 200, Mahacef, Taxim O, Augmentin Duo, Azee, Asthalin and Budecort nebulisation, Levolin, Montek LC, Emeset, Ondem, Rantac, Pan D, Zincovit, Zinconia, Econorm, Enterogermina, Levipil, Eptoin, Dexona, Lasix, mg/kg/dose, SpO2, CRP, bronchiolitis, febrile seizure, dengue.";
+
+const COMMON_BRANDS = `Fluvir, Tamiflu, Antiflu, Natflu, Sinarest, Sinarest AF, Wikoryl, Wikoryl AF, Maxtra, Maxtra P, Solvin Cold, Solvin Cold AF, Cheston Cold, Febrex Plus, Coldact, Relent, Rinostat, Nasoclear, Otrivin, Otrivin P, Nasivion, Solspre, Nasomist, Flomist, Avamys, Ambrodil, Ambrodil S, Ambrodil LX, Ambrolite, Ambrolite S, Mucolite, Mucolite LS, Macbery, Macbery LS, Alkof, Tixylix, Zedex, Grilinctus, Grilinctus BM, Grilinctus LS, Corex DX, Piriton, Kofarest, Kofarest PD, Brozeet LS, Ascoril LS, Ascoril D, Chericof, Chericof LS, Tusq DX, Honitus, Deletus, Asthakind, Asthakind LS, Asthalin, Ventorlin, Levolin, Duolin, Budecort, Budamate, Foracort, Seroflo, Flohale, Ipravent, Montair, Montair LC, Montek LC, Montina L, Romilast, Telekast L, Levocet, Lezyncet, Xyzal, Okacet, Cetzine, Alerid, Allegra, Atarax, Avil, Phenergan, Hifenac P, Meftal P, Meftal Spas, Ibugesic, Ibugesic Plus, Combiflam, Flexon, Lanol ER, Calpol, Calpol 120, Calpol 250, Crocin, Crocin DS, Dolo 120, Dolo 250, Dolo 650, P-125, P-250, Paracip, Febrinil, T-98, Pacimol, Sumo, Fepanil, Anamol Suppository, Neomol,
+Augmentin Duo, Augmentin DDS, Clavam, Clavam Bid, Advent, Moxikind CV, Mox, Novamox, Wymox, Ampoxin, Megapen, Zifi, Taxim O, Cefolac, Mahacef, Omnix, Cefix, Macpod, Cepodem, Gudcef, Monocef O, Swich, Cefakind, Altacef, Zocef, Ceftum, Sporidex, Phexin, Azee, Azithral, Zithrox, Azibact, ATM, Althrocin, Claribid, Oflox, Zenflox, Zanocin, Oflomac, Oflomac M, O2, Norflox TZ, Septran, Bactrim, Metrogyl, Flagyl, Aristogyl, Ornida, Nizonide, Nitazet, Enteroquinol, Furoxone, Zentel, Bandy, Bandy Plus, Mebex, Noworm, Ivecop, Lariago, Falcigo, Larinate, Lumerax, Doxy-1, Zovirax, Acivir, Forcan, Zocon, Candid Mouth Paint, Nystatin drops,
+Monocef, Xone, Oframax, Taxim, Omnatax, Fortum, Magnex, Zosyn, Pipzo, Tazact, Tazar, Meronem, Merocrit, Mero, Vancocin, Vancogen, Lizolid, Linid, Mikacin, Amicin, Genticyn, Garamycin, Ampilox, Augmentin injection, Clindac, Dalacin, Colistin, Targocid, Fungizone, AmBisome,
+Ondem, Emeset, Vomikind, Zofer, Domstal, Domperi, Perinorm, Rantac, Zinetac, Aciloc, Pan, Pantocid, Pantop, Omez, Lanzol Junior, Junior Lanzol, Esoz, Nexpro, Gelusil, Digene, Mucaine Gel, Sucrafil, Sparacid, Colicaid, Colimex, Cyclopam, Neopeptine, Bestozyme, Aristozyme, Unienzyme, Vitazyme, Cremaffin, Duphalac, Looz, Lactihep, Laxopeg, Pegmove, Softovac, Dulcoflex, Electral, Walyte, ORS-L, Prowel, Rebalanz, Zincovit, Z&D, Zinconia, Zevit, Becozinc, Enterogermina, Sporlac, Vizylac, Econorm, Darolac, Bifilac, Vibact, Gutpro, Redotil, Zedott, Racigyl, Lopamide,
+A to Z, Bevon, Hovite, Visyneral, Vi-Syneral Zinc, Multivite, Dexorange, Tonoferon, Mumfer, Ferium XT, Orofer XT, Haem Up, Livogen, Fefol, Folvite, Calcimax, Ostocalcium, Shelcal, CCM, Calcirol, Arachitol, Uprise D3, D-Rise, Vitanova, Ultra D3, Depura, D3 Must, Vitcofol, Neurobion, Optineuron, MVI, Polybion, Becosules, Evion, Aquasol A, Limcee, Celin, Nutrolin B, Cypon, Practin, Apetamin, Protinex, Pediasure, Liv 52, Udiliv, Ursocol, Hepamerz,
+Valparin, Encorate, Encorate Chrono, Epilex, Levipil, Levera, Keppra, Frisium, Lobazam, Gardenal, Phenobarb, Eptoin, Fosolin, Tegrital, Zen Retard, Oxetol, Midacip, Mezolam, Fulsed, Lopez, Calmpose, Pedicloryl, Tricloryl, Ketamine, Fentanyl, Dexem, Precedex,
+Omnacortil, Wysolone, Kidpred, Predone, Defcort, Dexona, Decdan, Betnesol, Efcorlin, Hydrocort, Solu-Medrol, Lasix, Aldactone, Lasilactone, Envas, Lanoxin, Adrenaline, Norad, Dopamine, Dobutamine, Milrinone, Vasopressin, Mannitol, Kenadion, Trenaxa, Pause, Heparin, Clexane, KCl, Potklor, Calcium gluconate, Sodabicarb, Magsulph, Isolyte P, Isolyte M, DNS, RL, NS, Dextrose 10%, Dextrose 25%, Human Actrapid, Huminsulin, Lantus, Thyronorm, Eltroxin, IVIG, Survanta, Neosurf, Capnea, Cafirate,
+T-Bact, Mupimet, Fucidin, Soframycin, Neosporin, Betadine, Silverex, Candid, Candid B, Clotrin, Quadriderm, Betnovate, Fourderm, Scabper, Permite, Calosoft, Lacto Calamine, Atogla, Venusia, Cetaphil, Siloderm, Rashfree, B4 Nappi, Siodil, Ciplox eye drops, Moxicip eye drops, Tobrex, Genticyn eye drops, Waxonil, Otogesic, Candibiotic`;
+
+const OLD_WPROMPT_START='Dictation by a paediatrician and paediatric intensivist in India. Medical terms';
+const DEFAULT_WPROMPT = "Paediatric prescription dictation. Syrup Calpol 5 ml TDS for 3 days, Syrup Fluvir 5 ml BD for 5 days, Syrup Chericof LS 5 ml TDS, Syrup Ascoril LS, Syrup Zifi 100, Syrup Augmentin Duo, Syrup Azee 200, Syrup Montek LC Kid, Syrup Ondem, Syrup Zincovit, Drops Colicaid, Tablet Dolo 650, Injection Monocef 500 mg IV BD, nebulisation Asthalin and Budecort, Sachet Econorm.";
 
 const DEFAULT_FIXES = [["maha sef","Mahacef"],["xifi","Zifi"],["jiran","Stugeron"]];
 
@@ -553,8 +566,10 @@ let cfg = {
   mGroq: store.get('mGroq','whisper-large-v3'), mClaude: store.get('mClaude','claude-sonnet-5-5'),
   wPrompt: store.get('wPrompt', DEFAULT_WPROMPT),
   drugs: store.get('drugs', DEFAULT_DRUGS), extra: store.get('extra',''),
-  fixes: store.get('fixes', DEFAULT_FIXES)
+  fixes: store.get('fixes', DEFAULT_FIXES),
+  twoPass: store.get('twoPass', true)
 };
+if((cfg.wPrompt||'').startsWith(OLD_WPROMPT_START)) cfg.wPrompt=DEFAULT_WPROMPT;
 let takes = [];           // text lengths for undo
 const drugList = () => cfg.drugs.split('\n').map(s=>s.trim()).filter(Boolean);
 
@@ -585,7 +600,7 @@ const cleanKey=s=>(s||'').replace(/[^\x21-\x7E]/g,'');
 function openSettings(){
   $('kGroq').value=cfg.kGroq; $('kClaude').value=cfg.kClaude;
   $('mGroq').value=cfg.mGroq; $('mClaude').value=cfg.mClaude;
-  $('wPrompt').value=cfg.wPrompt; $('drugs').value=cfg.drugs; $('extra').value=cfg.extra;
+  $('wPrompt').value=cfg.wPrompt; $('twoPass').checked=cfg.twoPass; $('drugs').value=cfg.drugs; $('extra').value=cfg.extra;
   $('drugCount').textContent=drugList().length+' items';
   renderFixes(); $('drawer').classList.add('open');
 }
@@ -594,7 +609,7 @@ function saveSettings(){
   if(/[\u2022\u25CF\u2026*]{3,}/.test(rawG+rawC)){ alert('That looks like a hidden/masked key (dots or stars). Copy the full key again from the Groq / Anthropic console.'); return; }
   cfg.kGroq=cleanKey(rawG); cfg.kClaude=cleanKey(rawC);
   cfg.mGroq=$('mGroq').value; cfg.mClaude=cleanKey($('mClaude').value)||'claude-sonnet-5-5';
-  cfg.wPrompt=$('wPrompt').value.trim(); cfg.drugs=$('drugs').value; cfg.extra=$('extra').value;
+  cfg.twoPass=$('twoPass').checked; store.set('twoPass',cfg.twoPass); cfg.wPrompt=$('wPrompt').value.trim(); cfg.drugs=$('drugs').value; cfg.extra=$('extra').value;
   ['kGroq','kClaude','mGroq','mClaude','wPrompt','drugs','extra'].forEach(k=>store.set(k,cfg[k]));
   refreshBadges(); $('drawer').classList.remove('open'); setStatus('Settings saved.','ok');
 }
@@ -678,12 +693,19 @@ async function processAudio(blob,name){
   busy=true; $('recBtn').disabled=true;
   try{
     setStatus('Transcribing with Whisper…');
-    const raw = await whisper(blob,name);
+    const raw = await whisper(blob,name,whisperPrompt());
     if(!raw.trim()){ setStatus('No speech detected.','err'); return; }
-    let fixed = applyFixes(raw), usedClaude=false;
+    let fixed = applyFixes(raw), usedClaude=false, second='';
+    if(cfg.twoPass){
+      const cands=shortlist(raw);
+      if(cands.length){
+        setStatus('Listening again for drug names…');
+        try{ second = applyFixes(await whisper(blob,name,'Prescription dictation: Syrup, Tablet, Injection, Drops, Capsule, Sachet, Respules. '+cands.join(', ')+'.')); }catch(e){ second=''; }
+      }
+    }
     if(cfg.kClaude){
       setStatus('Checking drug names and medical terms…');
-      try{ fixed = await claudeFix(fixed); usedClaude=true; }
+      try{ fixed = await claudeFix(fixed,second); usedClaude=true; }
       catch(e){ fixed = localFuzzy(fixed); setStatus('Claude step failed ('+e.message+'). Basic correction used.','err'); }
     } else { fixed = localFuzzy(fixed); }
     appendTake(fixed);
@@ -700,14 +722,14 @@ function whisperPrompt(){
   let p=cfg.wPrompt||''; if(taught) p+=' '+taught+'.';
   return p.slice(0,850);
 }
-async function whisper(blob,name){
+async function whisper(blob,name,p){
   const fd=new FormData();
   fd.append('file',blob,name);
   fd.append('model',cfg.mGroq);
   fd.append('temperature','0');
   fd.append('response_format','json');
   const lang=$('lang').value; if(lang) fd.append('language',lang);
-  const p=whisperPrompt(); if(p) fd.append('prompt',p);
+  if(p) fd.append('prompt',p.slice(0,850));
   const r=await fetch('https://api.groq.com/openai/v1/audio/transcriptions',{method:'POST',headers:{Authorization:'Bearer '+cfg.kGroq},body:fd});
   const j=await r.json().catch(()=>({}));
   if(!r.ok) throw new Error((j.error&&j.error.message)||('Groq error '+r.status));
@@ -724,7 +746,7 @@ function applyFixes(t){
   return t;
 }
 
-async function claudeFix(text){
+async function claudeFix(text,second){
   const mode=$('mode').value;
   const modeRule = {
     exact: 'OUTPUT MODE: Exact dictation. Keep the speaker\'s wording and order. Only fix recognition errors, punctuation, capitalisation and spoken formatting commands. If Tamil or another language was spoken, keep it in its own script.',
@@ -737,18 +759,21 @@ RULES
 1. Fix misrecognised drug names, medical terms, abbreviations, doses and units. When a garbled word sounds like an item in the HOSPITAL DRUG LIST, use that exact spelling. Otherwise use your own medical knowledge of Indian brand names and generics.
 2. Use context (form, dose, route, indication, patient age) to choose between similar-sounding drugs.
 3. NEVER add, remove or alter clinical content. Never change a number, dose, frequency or duration to something that was not said. Do not complete or "improve" a prescription.
-4. If you cannot confidently resolve a word, or a dose/unit sounds clinically implausible as heard, keep it and wrap it as [?word] so the doctor checks it. Use this sparingly but always for genuinely doubtful drug names and doses.
-5. Convert spoken commands: "full stop/period", "comma", "new line", "next line", "new paragraph", "colon", "open/close bracket", "number one/point one" for lists.
-6. Standard formatting: mg, mcg, ml, kg, mg/kg/dose, IV, IM, BD, TDS, QID, SOS, SpO2, °F/°C; numerals for doses.
-7. Output ONLY the corrected text. No preamble, no explanations, no quotes.`;
+4. The recogniser often FUSES the form word with the drug name or mangles the form word itself: "Seraflor" = "Syrup Fluvir", "Serafer" / "Sirap" / "Syrah" = "Syrup", "Tabdolo" = "Tablet Dolo", "Inge monosef" = "Injection Monocef". Always split these and recover both parts. Write forms as Syrup, Tablet, Injection, Drops, Capsule.
+5. Decide. Nonsense words that sit where a drug name belongs (before a dose like "5 ml BD") ARE drug names: replace them with the closest-sounding real drug that fits the form, dose and context. If you are reasonably sure, just write it. If it is a best guess, write the guess inside the marker, e.g. [?Fluvir] – never leave the garbled word in the output. Only when a dose/unit itself sounds clinically implausible, keep it as heard inside [?…].
+6. You may receive two transcripts of the SAME audio. TRANSCRIPT A is the plain pass. TRANSCRIPT B was recognised with a hint list of drug names, so it is usually better for drug names but may wrongly turn ordinary words into drug names. Use A for ordinary wording and numbers, and B to resolve drug names; where they disagree on a number, mark it [?…].
+7. Convert spoken commands: "full stop/period", "comma", "new line", "next line", "new paragraph", "colon", "open/close bracket", "number one/point one" for lists.
+8. Standard formatting: mg, mcg, ml, kg, mg/kg/dose, IV, IM, BD, TDS, QID, SOS, SpO2, °F/°C; numerals for doses.
+9. Output ONLY the corrected text, once. No preamble, no explanations, no quotes.`;
   const vocab = 'HOSPITAL DRUG LIST (preferred spellings):\n'+drugList().join(', ')
     + (cfg.extra.trim() ? '\n\nEXTRA LOCAL WORDS (names, wards, terms):\n'+cfg.extra.trim().split('\n').join(', ') : '')
+    + '\n\nOTHER COMMON INDIAN BRANDS (paediatric and general):\n'+COMMON_BRANDS.replace(/\n/g,' ')
     + '\n\nCOMMON MEDICAL VOCABULARY:\n'+MED_TERMS
     + (cfg.fixes.length ? '\n\nKNOWN MISHEARINGS (heard -> correct):\n'+cfg.fixes.map(f=>f[0]+' -> '+f[1]).join('\n') : '');
   const body={
     model:cfg.mClaude, max_tokens:8000,
     system:[{type:'text',text:sysRules+'\n\n'+vocab,cache_control:{type:'ephemeral'}}],
-    messages:[{role:'user',content:modeRule+'\n\nRAW TRANSCRIPT:\n<transcript>\n'+text+'\n</transcript>'}]
+    messages:[{role:'user',content:modeRule+'\n\nTRANSCRIPT A:\n<transcript>\n'+text+'\n</transcript>'+(second ? '\n\nTRANSCRIPT B (drug-name hinted):\n<transcript_b>\n'+second+'\n</transcript_b>' : '')}]
   };
   const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{
     'content-type':'application/json','x-api-key':cfg.kClaude,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
@@ -758,6 +783,42 @@ RULES
   const out=(j.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').trim();
   if(!out) throw new Error('empty reply');
   return out.replace(/^<transcript>\s*|\s*<\/transcript>$/g,'');
+}
+
+
+/* Sound-alike shortlist of drug names, used to bias a second Whisper pass */
+const STOP=new Set('the a an and or of on in at to for with was were is are be been has have had patient child baby started start give given stop stopped continue continued days day weeks week months hours hourly daily once twice thrice times after before food morning night afternoon evening syrup tablet tablets injection capsule drops sachet ointment cream respule nebulisation nebulization dose then also plus review advised discharge admitted fever cough cold vomiting loose stools history complaints examination normal stable please follow this that from will should'.split(' '));
+function phon(s){ return s.toLowerCase().replace(/[^a-z]/g,'').replace(/ph/g,'f').replace(/ck/g,'k').replace(/c(?=[eiy])/g,'s').replace(/c/g,'k').replace(/q/g,'k').replace(/x/g,'ks').replace(/z/g,'s').replace(/w/g,'v').replace(/y/g,'i').replace(/(.)\1+/g,'$1'); }
+const skel=s=>s ? s[0]+s.slice(1).replace(/[aeiou]/g,'') : '';
+const sim=(a,b)=>(!a||!b)?0:1-lev(a,b)/Math.max(a.length,b.length);
+let poolCache=null, poolSrc='';
+function namePool(){
+  const src=cfg.drugs+'|'+cfg.extra;
+  if(poolCache && poolSrc===src) return poolCache;
+  const all=[...drugList(), ...COMMON_BRANDS.split(/,\s*|\n/), ...cfg.extra.split('\n')].map(s=>s.trim()).filter(Boolean);
+  const seen=new Set(); poolCache=[];
+  for(const d of all){ const k=d.toLowerCase(); if(seen.has(k)) continue; seen.add(k);
+    const f=phon(d), w=phon(d.split(/[\s-]/)[0]); if(w.length<3) continue;
+    poolCache.push({d,f,w,sf:skel(f),sw:skel(w)}); }
+  poolSrc=src; return poolCache;
+}
+function shortlist(text){
+  const toks=text.split(/[^A-Za-z0-9&-]+/).filter(Boolean), heard=new Set();
+  for(let i=0;i<toks.length;i++){
+    const t=toks[i]; if(t.length<4 || STOP.has(t.toLowerCase()) || /^\d/.test(t)) continue;
+    heard.add(phon(t));
+    if(toks[i+1] && !/^\d/.test(toks[i+1]) && !STOP.has(toks[i+1].toLowerCase())) heard.add(phon(t+toks[i+1]));
+    // "Syrup Fluvir" is often fused into one word like "Seraflor"
+    const m=phon(t).match(/^(s[aeiou]r[aeiou]p?|tab|inj)(.{3,})$/); if(m) heard.add(m[2]);
+  }
+  const best=new Map();
+  for(const hw of heard){ if(hw.length<3) continue; const hs=skel(hw);
+    for(const x of namePool()){
+      const s=Math.max(sim(hw,x.w), sim(hw,x.f), hs.length>=3 ? 0.9*Math.max(sim(hs,x.sw),sim(hs,x.sf)) : 0);
+      if(s>=0.6 && s>(best.get(x.d)||0)) best.set(x.d,s);
+    } }
+  cfg.fixes.forEach(f=>best.set(f[1],1));
+  return [...best.entries()].sort((a,b)=>b[1]-a[1]).slice(0,45).map(e=>e[0]);
 }
 
 /* Basic offline-style correction when Claude is not configured */
@@ -771,8 +832,9 @@ function lev(a,b){
 }
 function localFuzzy(text){
   const norm=s=>s.toLowerCase().replace(/[^a-z0-9]/g,'');
-  const names=drugList().map(d=>({d,n:norm(d)})).filter(x=>x.n.length>=6);
-  const exact=new Set(drugList().map(norm));
+  const all=namePool().map(x=>x.d);
+  const names=all.map(d=>({d,n:norm(d)})).filter(x=>x.n.length>=6);
+  const exact=new Set(all.map(norm));
   return text.replace(/[A-Za-z][A-Za-z-]{4,}(?: [A-Za-z]{2,})?/g, w=>{
     const first=w.split(' ')[0];
     for(const cand of (w.includes(' ')?[w,first]:[w])){
