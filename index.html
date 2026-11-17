@@ -70,7 +70,7 @@ h2{font-size:14px;margin:0 0 10px;text-transform:uppercase;letter-spacing:.8px;c
 </head>
 <body>
 <header>
-  <h1>Med<span>Scribe</span> <small style="font-size:11px;color:#667173;font-weight:400">v1.2</small></h1>
+  <h1>Med<span>Scribe</span> <small style="font-size:11px;color:#667173;font-weight:400">v1.3</small></h1>
   <div class="row" style="flex:0 0 auto;gap:8px">
     <span id="bStt" class="badge fit">Whisper: no key</span>
     <span id="bFix" class="badge fit">Claude: no key</span>
@@ -152,6 +152,8 @@ h2{font-size:14px;margin:0 0 10px;text-transform:uppercase;letter-spacing:.8px;c
     <textarea id="wPrompt" rows="4"></textarea>
 
     <label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-size:14px"><input type="checkbox" id="twoPass" style="width:auto"> Double-listen for drug names (more accurate, a few seconds slower)</label>
+
+    <label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-size:14px"><input type="checkbox" id="autoCopy" style="width:auto"> Copy transcript to clipboard automatically after each dictation</label>
 
     <h3>2. Medical correction (Claude)</h3>
     <label>Claude API key (SK)</label>
@@ -567,7 +569,8 @@ let cfg = {
   wPrompt: store.get('wPrompt', DEFAULT_WPROMPT),
   drugs: store.get('drugs', DEFAULT_DRUGS), extra: store.get('extra',''),
   fixes: store.get('fixes', DEFAULT_FIXES),
-  twoPass: store.get('twoPass', true)
+  twoPass: store.get('twoPass', true),
+  autoCopy: store.get('autoCopy', true)
 };
 if((cfg.wPrompt||'').startsWith(OLD_WPROMPT_START)) cfg.wPrompt=DEFAULT_WPROMPT;
 let takes = [];           // text lengths for undo
@@ -600,7 +603,7 @@ const cleanKey=s=>(s||'').replace(/[^\x21-\x7E]/g,'');
 function openSettings(){
   $('kGroq').value=cfg.kGroq; $('kClaude').value=cfg.kClaude;
   $('mGroq').value=cfg.mGroq; $('mClaude').value=cfg.mClaude;
-  $('wPrompt').value=cfg.wPrompt; $('twoPass').checked=cfg.twoPass; $('drugs').value=cfg.drugs; $('extra').value=cfg.extra;
+  $('wPrompt').value=cfg.wPrompt; $('twoPass').checked=cfg.twoPass; $('autoCopy').checked=cfg.autoCopy; $('drugs').value=cfg.drugs; $('extra').value=cfg.extra;
   $('drugCount').textContent=drugList().length+' items';
   renderFixes(); $('drawer').classList.add('open');
 }
@@ -609,7 +612,7 @@ function saveSettings(){
   if(/[\u2022\u25CF\u2026*]{3,}/.test(rawG+rawC)){ alert('That looks like a hidden/masked key (dots or stars). Copy the full key again from the Groq / Anthropic console.'); return; }
   cfg.kGroq=cleanKey(rawG); cfg.kClaude=cleanKey(rawC);
   cfg.mGroq=$('mGroq').value; cfg.mClaude=cleanKey($('mClaude').value)||'claude-sonnet-5-5';
-  cfg.twoPass=$('twoPass').checked; store.set('twoPass',cfg.twoPass); cfg.wPrompt=$('wPrompt').value.trim(); cfg.drugs=$('drugs').value; cfg.extra=$('extra').value;
+  cfg.autoCopy=$('autoCopy').checked; store.set('autoCopy',cfg.autoCopy); cfg.twoPass=$('twoPass').checked; store.set('twoPass',cfg.twoPass); cfg.wPrompt=$('wPrompt').value.trim(); cfg.drugs=$('drugs').value; cfg.extra=$('extra').value;
   ['kGroq','kClaude','mGroq','mClaude','wPrompt','drugs','extra'].forEach(k=>store.set(k,cfg[k]));
   refreshBadges(); $('drawer').classList.remove('open'); setStatus('Settings saved.','ok');
 }
@@ -695,7 +698,7 @@ async function processAudio(blob,name){
     setStatus('Transcribing with Whisper…');
     const raw = await whisper(blob,name,whisperPrompt());
     if(!raw.trim()){ setStatus('No speech detected.','err'); return; }
-    let fixed = applyFixes(raw), usedClaude=false, second='';
+    let fixed = applyFixes(raw), usedClaude=false, second='', copied=false;
     if(cfg.twoPass){
       const cands=shortlist(raw);
       if(cands.length){
@@ -710,7 +713,8 @@ async function processAudio(blob,name){
     } else { fixed = localFuzzy(fixed); }
     appendTake(fixed);
     showDiff(raw,fixed);
-    if(usedClaude || !cfg.kClaude) setStatus(usedClaude ? 'Done. Review highlighted corrections below.' : 'Done (basic correction – add Claude key for full medical correction).','ok');
+    if(cfg.autoCopy){ try{ await navigator.clipboard.writeText($('out').value); copied=true; }catch(e){ copied=false; } }
+    if(usedClaude || !cfg.kClaude) setStatus((copied?'Copied to clipboard. ':'')+(usedClaude ? 'Done. Review highlighted corrections below.' : 'Done (basic correction – add Claude key for full medical correction).'),'ok');
   }catch(e){
     setStatus('Failed: '+e.message,'err');
   }finally{ busy=false; $('recBtn').disabled=false; }
