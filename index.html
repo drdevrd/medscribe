@@ -831,7 +831,8 @@ function shortlist(text){
 
 /* One medicine per line without Claude: break before each form word */
 function splitMeds(t){
-  return t.replace(/[ \t]*[.;,]?[ \t]+(?:and[ \t]+|then[ \t]+)?(?=(?:syrup|syp|tablet|tab|injection|inj|drops|capsule|cap|sachet|ointment|cream|respules?|nebulisation|nebulization)\b)/gi, '\n');
+  return t.replace(/[ \t]*[.;,]?[ \t]+(?:and[ \t]+|then[ \t]+)?(?=(?:syrup|syp|tablet|tab|injection|inj|drops|capsule|cap|sachet|ointment|cream|respules?|nebulisation|nebulization)\b)/gi,
+    (m,off)=> /(\d|\b(?:half|one|two|three|four|a))\s*$/i.test(t.slice(0,off)) ? m : '\n');
 }
 /* Basic offline-style correction when Claude is not configured */
 function lev(a,b){
