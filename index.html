@@ -70,7 +70,7 @@ h2{font-size:14px;margin:0 0 10px;text-transform:uppercase;letter-spacing:.8px;c
 </head>
 <body>
 <header>
-  <h1>Med<span>Scribe</span> <small style="font-size:11px;color:#667173;font-weight:400">v1.4</small></h1>
+  <h1>Med<span>Scribe</span> <small style="font-size:11px;color:#667173;font-weight:400">v1.5</small></h1>
   <div class="row" style="flex:0 0 auto;gap:8px">
     <span id="bStt" class="badge fit">Whisper: no key</span>
     <span id="bFix" class="badge fit">Claude: no key</span>
@@ -754,7 +754,7 @@ async function claudeFix(text,second){
   const mode=$('mode').value;
   const modeRule = {
     exact: 'OUTPUT MODE: Exact dictation. Keep the speaker\'s wording and order. Only fix recognition errors, punctuation, capitalisation and spoken formatting commands, and lay out medicines one per line (rule 9). If Tamil or another language was spoken, keep it in its own script.',
-    note: 'OUTPUT MODE: Tidy clinical note. Keep every clinical fact exactly as dictated, but remove fillers and false starts, and lay it out cleanly (short paragraphs; medications as a numbered list in the form "Inj./Syr./Tab. Name dose route frequency × duration" when the speaker dictated them). Do not add headings or content the speaker did not say.',
+    note: 'OUTPUT MODE: Tidy clinical note. Keep every clinical fact exactly as dictated, but remove fillers and false starts, and lay it out cleanly (short paragraphs; medications as a numbered list, each in the comma-separated layout of rule 9, when the speaker dictated them). Do not add headings or content the speaker did not say.',
     english: 'OUTPUT MODE: Translate to English. Render everything in clear medical English, translating any Tamil/Hindi/Malayalam speech faithfully. Drug names, doses and numbers must be carried over unchanged.'
   }[mode];
   const sysRules = `You correct raw speech-to-text output of medical dictation by doctors in a paediatric and multi-specialty hospital in Tamil Nadu, India. Speakers have varied Indian accents (Tamil, Malayalam, Hindi, others) and may mix languages. The recogniser often mangles drug brand names, generics, abbreviations and units.
@@ -768,9 +768,11 @@ RULES
 6. You may receive two transcripts of the SAME audio. TRANSCRIPT A is the plain pass. TRANSCRIPT B was recognised with a hint list of drug names, so it is usually better for drug names but may wrongly turn ordinary words into drug names. Use A for ordinary wording and numbers, and B to resolve drug names; where they disagree on a number, mark it [?…].
 7. Convert spoken commands: "full stop/period", "comma", "new line", "next line", "new paragraph", "colon", "open/close bracket", "number one/point one" for lists.
 8. Standard formatting: mg, mcg, ml, kg, mg/kg/dose, IV, IM, BD, TDS, QID, SOS, SpO2, °F/°C; numerals for doses.
-9. MEDICINES LAYOUT: whenever the speaker dictates medicines, put EACH medicine on its own line (press Enter between them). One line = form + name + strength/dose + frequency + timing + duration, in the order spoken, e.g.
-Tablet Dolo 650 1 tablet BD after food for 5 days
-Syrup Calpol 5 ml TDS for 3 days
+9. MEDICINES LAYOUT: whenever the speaker dictates medicines, put EACH medicine on its own line (press Enter between them). One line = form + name, then dose, then frequency, then timing and duration, separated by COMMAS, in the order spoken. Put a comma after the name, after the dose and after the frequency; keep the timing and duration together without a comma between them. Examples:
+Tablet XYZ, 1 tablet, BD, after food for 5 days
+Syrup Calpol, 5 ml, TDS, after food for 3 days
+Injection Monocef, 500 mg IV, BD, for 5 days
+If a part was not dictated (e.g. no timing), simply leave it out; never invent it.
 Never join two medicines on one line, never put a line break inside one medicine, and keep non-medicine sentences (history, advice, diagnosis) as normal text on their own lines. Do not number the lines unless the speaker says so. Write the form as Tablet, Syrup, Injection, Drops, Capsule, Sachet, Ointment, Cream, Nebulisation.
 10. Output ONLY the corrected text, once. No preamble, no explanations, no quotes.`;
   const vocab = 'HOSPITAL DRUG LIST (preferred spellings):\n'+drugList().join(', ')
